@@ -7,7 +7,7 @@ A small Windows PowerShell/WinForms application for moving or renaming Google Cl
 For these reasons, keeping rename / move operation strictly on the platform is both performant and cost efficient. This can be done with a google provided utility, gcloud CLI, in the most simple form shown below. 
 
 ```powershell
-gcloud storage mv 'gs://source/path' 'gs://destination/path'
+gcloud storage mv "gs://source/path" "gs://destination/path"
 ```
 
 However, the gcloud CLI can be user unfriendly, and even for experienced users the syntax isn't always obvious. Trailing slashes, wildcards, and source folder duplication on conflict can turn a simple logical operation into an arduous learning exercise, and potentially put data at risk if the behavior of the utility is misinterpreted. 
@@ -31,6 +31,10 @@ In addition to streamlining GCS move/rename events, the app will also provide so
 ![Cost warning for egress](doc/images/app_screenshot2.png)
 
 ![Cost warning for egress and archival source bucket class](doc/images/app_screenshot3.png)
+
+The app also allows you to copy the 'Equivalent gcloud' command to use in your own workflows more directly as desired. It also pipes stderr/stdout from the gcloud tool, and allows for downloading this log output as a structured csv. 
+
+![Download output as csv](doc/images/app_screenshot4.png)
 
 ## Dependencies and other Prerequisites
 
