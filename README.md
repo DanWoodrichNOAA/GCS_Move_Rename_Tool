@@ -14,7 +14,7 @@ However, the gcloud CLI can be user unfriendly, and even for experienced users t
 
 This application serves to leverage the powerful server side operations for GCS in a user-friendly and consistent local interface. 
 
-![Screenshot of Alpha3 release of GCS Move/Rename tool](doc/images/app_screenshot.png)
+![Screenshot of latest release of GCS Move/Rename tool](doc/images/app_screenshot.png)
 
 ## How to use
 
@@ -23,6 +23,14 @@ Download the .exe for the tool from the latest release, using the link at the to
 The application will automatically check for needed dependencies, which are often already configured on systems of users that have used Google Cloud Platform before. If they are not found, hover over the ❌ and the application hover will tell you how to resolve the issue. 
 
 ![Missing dependency notice](doc/images/app_screenshot_dep_not_met.png)
+
+## Features
+
+In addition to streamlining GCS move/rename events, the app will also provide some visibility and warning of cost considerations around egress and access fees. While the cost model of GCS is nuanced, this provides some quick feedback for users who may not casually understand higher cost implications for some types of moves. 
+
+![Cost warning for egress](doc/images/app_screenshot2.png)
+
+![Cost warning for egress and archival source bucket class](doc/images/app_screenshot3.png)
 
 ## Dependencies and other Prerequisites
 

@@ -153,43 +153,76 @@ function Get-BucketName {
     return ($path -split '/', 2)[0].Trim()
 }
 
+function Test-IsUsBucketLocation {
+    param([psobject]$Metadata)
+
+    if (-not $Metadata.Known) {
+        return $false
+    }
+
+    $locations = @(
+        @($Metadata.Location, $Metadata.DataLocations) |
+            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }
+    )
+    if ($locations.Count -eq 0) {
+        return $false
+    }
+
+    return @($locations | Where-Object { [string]$_ -notmatch '^(?i:US(?:-|$)|NAM4$)' }).Count -eq 0
+}
+
 function Update-BucketLocationDisplay {
     $sourceBucket = Get-BucketName $sourceTextBox
     $destinationBucket = Get-BucketName $destinationTextBox
 
+    $neutralColor = [System.Drawing.Color]::FromArgb(75, 85, 99)
+    $greenColor = [System.Drawing.Color]::FromArgb(28, 128, 82)
+    $yellowColor = [System.Drawing.Color]::FromArgb(166, 112, 0)
+    $orangeColor = [System.Drawing.Color]::FromArgb(196, 91, 0)
+    $redColor = [System.Drawing.Color]::FromArgb(176, 35, 45)
+
     foreach ($item in @(
-        @{ Bucket = $sourceBucket; Label = $sourceLocationLabel },
-        @{ Bucket = $destinationBucket; Label = $destinationLocationLabel }
+        @{ Bucket = $sourceBucket; LocationLabel = $sourceLocationLabel; StorageLabel = $sourceStorageClassLabel },
+        @{ Bucket = $destinationBucket; LocationLabel = $destinationLocationLabel; StorageLabel = $destinationStorageClassLabel }
     )) {
+        $item.LocationLabel.ForeColor = $neutralColor
+        $item.StorageLabel.ForeColor = $neutralColor
         if ([string]::IsNullOrWhiteSpace($item.Bucket)) {
-            $item.Label.Text = ''
+            $item.LocationLabel.Text = ''
+            $item.StorageLabel.Text = ''
         }
         elseif (-not $script:GcloudReady) {
-            $item.Label.Text = 'Location: unknown'
+            $item.LocationLabel.Text = 'Location: unknown'
+            $item.StorageLabel.Text = 'Default storage class: unknown'
         }
         elseif ($script:BucketLocationCache.ContainsKey($item.Bucket)) {
             $metadata = $script:BucketLocationCache[$item.Bucket]
-            $item.Label.Text = if ($metadata.Known) {
+            $item.LocationLabel.Text = if ($metadata.Known) {
                 "Location: $($metadata.DisplayLocation)"
             }
             else {
                 'Location: unknown'
             }
+            $item.StorageLabel.Text = if ($metadata.StorageClassKnown) {
+                "Default storage class: $($metadata.StorageClass)"
+            }
+            else {
+                'Default storage class: unknown'
+            }
         }
         else {
-            $item.Label.Text = 'Location: checking...'
+            $item.LocationLabel.Text = 'Location: checking...'
+            $item.StorageLabel.Text = 'Default storage class: checking...'
         }
     }
 
     $locationWarningLabel.Text = ''
+    $locationWarningLabel.ForeColor = $yellowColor
     if ([string]::IsNullOrWhiteSpace($sourceBucket) -or [string]::IsNullOrWhiteSpace($destinationBucket)) {
         return
     }
-    if ($sourceBucket.Equals($destinationBucket, [System.StringComparison]::OrdinalIgnoreCase)) {
-        return
-    }
     if (-not $script:GcloudReady) {
-        $locationWarningLabel.Text = 'Warning: Location unknown. Egress costs may apply.'
+        $locationWarningLabel.Text = 'Warning: Bucket location and storage class are unknown; costs may apply.'
         return
     }
     if (-not $script:BucketLocationCache.ContainsKey($sourceBucket) -or
@@ -199,11 +232,85 @@ function Update-BucketLocationDisplay {
 
     $sourceMetadata = $script:BucketLocationCache[$sourceBucket]
     $destinationMetadata = $script:BucketLocationCache[$destinationBucket]
-    if (-not $sourceMetadata.Known -or -not $destinationMetadata.Known) {
-        $locationWarningLabel.Text = 'Warning: Location unknown. Egress costs may apply.'
+
+    $locationRisk = 'Unknown'
+    $locationReason = 'one or both bucket locations are unknown'
+    if ($sourceMetadata.Known -and $destinationMetadata.Known) {
+        if ($sourceMetadata.LocationKey -eq $destinationMetadata.LocationKey) {
+            $locationRisk = 'Green'
+            $sourceLocationLabel.ForeColor = $greenColor
+            $destinationLocationLabel.ForeColor = $greenColor
+            $locationReason = ''
+        }
+        elseif ((Test-IsUsBucketLocation $sourceMetadata) -and (Test-IsUsBucketLocation $destinationMetadata)) {
+            $locationRisk = 'Yellow'
+            $sourceLocationLabel.ForeColor = $yellowColor
+            $destinationLocationLabel.ForeColor = $yellowColor
+            $locationReason = 'the buckets use different US locations'
+        }
+        else {
+            $locationRisk = 'Red'
+            $sourceLocationLabel.ForeColor = $redColor
+            $destinationLocationLabel.ForeColor = $redColor
+            $locationReason = 'the buckets use different locations and at least one is outside the US'
+        }
     }
-    elseif ($sourceMetadata.LocationKey -ne $destinationMetadata.LocationKey) {
-        $locationWarningLabel.Text = 'Warning: Different locations. Egress costs will apply.'
+
+    $sourceStorageRisk = 'Unknown'
+    $sourceStorageReason = 'the source storage class is unknown'
+    if ($sourceMetadata.StorageClassKnown) {
+        switch ($sourceMetadata.StorageClass.ToUpperInvariant()) {
+            'STANDARD' {
+                $sourceStorageRisk = 'Green'
+                $sourceStorageClassLabel.ForeColor = $greenColor
+                $sourceStorageReason = ''
+            }
+            'NEARLINE' {
+                $sourceStorageRisk = 'Yellow'
+                $sourceStorageClassLabel.ForeColor = $yellowColor
+                $sourceStorageReason = 'the source uses NEARLINE storage'
+            }
+            'COLDLINE' {
+                $sourceStorageRisk = 'Orange'
+                $sourceStorageClassLabel.ForeColor = $orangeColor
+                $sourceStorageReason = 'the source uses COLDLINE storage'
+            }
+            { $_ -in @('ARCHIVE', 'ARCHIVAL') } {
+                $sourceStorageRisk = 'Red'
+                $sourceStorageClassLabel.ForeColor = $redColor
+                $sourceStorageReason = 'the source uses ARCHIVE storage'
+            }
+        }
+    }
+    if ($destinationMetadata.StorageClassKnown) {
+        $destinationStorageClassLabel.ForeColor = $greenColor
+    }
+
+    $unknownReasons = @()
+    if ($locationRisk -eq 'Unknown') { $unknownReasons += $locationReason }
+    if ($sourceStorageRisk -eq 'Unknown') { $unknownReasons += $sourceStorageReason }
+    if (-not $destinationMetadata.StorageClassKnown) { $unknownReasons += 'the destination storage class is unknown' }
+    $knownCostReasons = @()
+    if ($locationRisk -in @('Yellow', 'Red')) { $knownCostReasons += $locationReason }
+    if ($sourceStorageRisk -in @('Yellow', 'Orange', 'Red')) { $knownCostReasons += $sourceStorageReason }
+
+    if ($knownCostReasons.Count -eq 0 -and $unknownReasons.Count -eq 0) {
+        return
+    }
+
+    $reasonText = (@($knownCostReasons + $unknownReasons) -join ', and ')
+    $hasRedAlert = $locationRisk -eq 'Red' -or $sourceStorageRisk -eq 'Red'
+    if ($hasRedAlert) {
+        $locationWarningLabel.ForeColor = $redColor
+    }
+    if ($knownCostReasons.Count -gt 0 -and $unknownReasons.Count -gt 0) {
+        $locationWarningLabel.Text = "$(if ($hasRedAlert) { 'High-cost warning' } else { 'Warning' }): $reasonText; costs will apply and additional costs may apply."
+    }
+    elseif ($knownCostReasons.Count -gt 0) {
+        $locationWarningLabel.Text = "$(if ($hasRedAlert) { 'High-cost warning' } else { 'Warning' }): $reasonText; costs will apply."
+    }
+    else {
+        $locationWarningLabel.Text = "Warning: $reasonText; costs may apply."
     }
 }
 
@@ -229,7 +336,7 @@ function Start-NextBucketLocationLookup {
         try {
             $json = & $GcloudPath storage buckets describe "gs://$Bucket" --format=json --quiet 2>$null
             if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($json -join ''))) {
-                return [pscustomobject]@{ Known = $false; DisplayLocation = ''; LocationKey = '' }
+                return [pscustomobject]@{ Known = $false; DisplayLocation = ''; LocationKey = ''; Location = ''; DataLocations = @(); StorageClassKnown = $false; StorageClass = '' }
             }
             $metadata = ($json -join "`n") | ConvertFrom-Json
             $customPlacementProperty = $metadata.PSObject.Properties['custom_placement_config']
@@ -254,14 +361,26 @@ function Start-NextBucketLocationLookup {
                 [string]$metadata.location
             }
             $known = -not [string]::IsNullOrWhiteSpace([string]$metadata.location)
+            $storageClassProperty = $metadata.PSObject.Properties['default_storage_class']
+            if ($null -eq $storageClassProperty) {
+                $storageClassProperty = $metadata.PSObject.Properties['defaultStorageClass']
+            }
+            if ($null -eq $storageClassProperty) {
+                $storageClassProperty = $metadata.PSObject.Properties['storage_class']
+            }
+            $storageClass = if ($null -eq $storageClassProperty) { '' } else { [string]$storageClassProperty.Value }
             return [pscustomobject]@{
                 Known = $known
                 DisplayLocation = $displayLocation
                 LocationKey = "$([string]$metadata.location)|$(($dataLocations | Sort-Object) -join '|')"
+                Location = [string]$metadata.location
+                DataLocations = $dataLocations
+                StorageClassKnown = -not [string]::IsNullOrWhiteSpace($storageClass)
+                StorageClass = $storageClass.ToUpperInvariant()
             }
         }
         catch {
-            return [pscustomobject]@{ Known = $false; DisplayLocation = ''; LocationKey = '' }
+            return [pscustomobject]@{ Known = $false; DisplayLocation = ''; LocationKey = ''; Location = ''; DataLocations = @(); StorageClassKnown = $false; StorageClass = '' }
         }
     }).AddArgument($script:GcloudPath).AddArgument($bucket)
     $script:MetadataOperation = $script:MetadataPowerShell.BeginInvoke()
@@ -402,8 +521,8 @@ function Update-CommandPreview {
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'GCS Move / Rename'
-$form.ClientSize = New-Object System.Drawing.Size(760, 710)
-$form.MinimumSize = New-Object System.Drawing.Size(650, 650)
+$form.ClientSize = New-Object System.Drawing.Size(760, 730)
+$form.MinimumSize = New-Object System.Drawing.Size(650, 670)
 $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
 $form.Font = New-Object System.Drawing.Font('Segoe UI', 9)
 $form.BackColor = [System.Drawing.Color]::FromArgb(247, 248, 250)
@@ -446,8 +565,15 @@ $sourceLocationLabel = New-Object System.Windows.Forms.Label
 $sourceLocationLabel.Text = ''
 $sourceLocationLabel.Left = 66
 $sourceLocationLabel.Top = 120
-$sourceLocationLabel.AutoSize = $true
+$sourceLocationLabel.Width = 250
 $sourceLocationLabel.ForeColor = [System.Drawing.Color]::FromArgb(75, 85, 99)
+
+$sourceStorageClassLabel = New-Object System.Windows.Forms.Label
+$sourceStorageClassLabel.Text = ''
+$sourceStorageClassLabel.Left = 330
+$sourceStorageClassLabel.Top = 120
+$sourceStorageClassLabel.AutoSize = $true
+$sourceStorageClassLabel.ForeColor = [System.Drawing.Color]::FromArgb(75, 85, 99)
 
 $destinationLabel = New-Object System.Windows.Forms.Label
 $destinationLabel.Text = 'Destination Google Cloud Storage Bucket path'
@@ -473,21 +599,29 @@ $destinationLocationLabel = New-Object System.Windows.Forms.Label
 $destinationLocationLabel.Text = ''
 $destinationLocationLabel.Left = 66
 $destinationLocationLabel.Top = 200
-$destinationLocationLabel.AutoSize = $true
+$destinationLocationLabel.Width = 250
 $destinationLocationLabel.ForeColor = [System.Drawing.Color]::FromArgb(75, 85, 99)
+
+$destinationStorageClassLabel = New-Object System.Windows.Forms.Label
+$destinationStorageClassLabel.Text = ''
+$destinationStorageClassLabel.Left = 330
+$destinationStorageClassLabel.Top = 200
+$destinationStorageClassLabel.AutoSize = $true
+$destinationStorageClassLabel.ForeColor = [System.Drawing.Color]::FromArgb(75, 85, 99)
 
 $locationWarningLabel = New-Object System.Windows.Forms.Label
 $locationWarningLabel.Text = ''
 $locationWarningLabel.Left = 24
 $locationWarningLabel.Top = 224
 $locationWarningLabel.AutoSize = $true
+$locationWarningLabel.MaximumSize = New-Object System.Drawing.Size(710, 0)
 $locationWarningLabel.ForeColor = [System.Drawing.Color]::FromArgb(176, 35, 45)
 $locationWarningLabel.Font = New-Object System.Drawing.Font('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
 
 $mergeDestinationCheckBox = New-Object System.Windows.Forms.CheckBox
 $mergeDestinationCheckBox.Text = 'Merge into destination directory'
 $mergeDestinationCheckBox.Left = 24
-$mergeDestinationCheckBox.Top = 249
+$mergeDestinationCheckBox.Top = 267
 $mergeDestinationCheckBox.AutoSize = $true
 $mergeDestinationCheckBox.Checked = $true
 $toolTip.SetToolTip($mergeDestinationCheckBox, 'Move the source directory contents directly into the destination instead of creating a source-named subdirectory.')
@@ -495,7 +629,7 @@ $toolTip.SetToolTip($mergeDestinationCheckBox, 'Move the source directory conten
 $overwriteMatchingFilesCheckBox = New-Object System.Windows.Forms.CheckBox
 $overwriteMatchingFilesCheckBox.Text = 'Overwrite matching files'
 $overwriteMatchingFilesCheckBox.Left = 280
-$overwriteMatchingFilesCheckBox.Top = 249
+$overwriteMatchingFilesCheckBox.Top = 267
 $overwriteMatchingFilesCheckBox.AutoSize = $true
 $overwriteMatchingFilesCheckBox.Checked = $false
 $toolTip.SetToolTip($overwriteMatchingFilesCheckBox, 'Allow matching destination files to be replaced; when unchecked, gcloud uses --no-clobber and skips them.')
@@ -503,7 +637,7 @@ $toolTip.SetToolTip($overwriteMatchingFilesCheckBox, 'Allow matching destination
 $executeButton = New-Object System.Windows.Forms.Button
 $executeButton.Text = 'Execute'
 $executeButton.Left = 634
-$executeButton.Top = 242
+$executeButton.Top = 260
 $executeButton.Width = 100
 $executeButton.Height = 32
 $executeButton.Anchor = 'Top, Right'
@@ -515,15 +649,15 @@ $executeButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $commandLabel = New-Object System.Windows.Forms.Label
 $commandLabel.Text = 'Equivalent gcloud command'
 $commandLabel.Left = 24
-$commandLabel.Top = 294
+$commandLabel.Top = 312
 $commandLabel.AutoSize = $true
 
-$copyCommandButton = New-IconButton $copyIcon 'Copy equivalent command' 704 286
+$copyCommandButton = New-IconButton $copyIcon 'Copy equivalent command' 704 304
 $toolTip.SetToolTip($copyCommandButton, 'Copy equivalent gcloud command')
 
 $commandTextBox = New-Object System.Windows.Forms.TextBox
 $commandTextBox.Left = 24
-$commandTextBox.Top = 322
+$commandTextBox.Top = 340
 $commandTextBox.Width = 710
 $commandTextBox.Height = 70
 $commandTextBox.Anchor = 'Top, Left, Right'
@@ -537,19 +671,19 @@ $commandTextBox.BackColor = [System.Drawing.Color]::White
 $outputLabel = New-Object System.Windows.Forms.Label
 $outputLabel.Text = 'Output'
 $outputLabel.Left = 24
-$outputLabel.Top = 412
+$outputLabel.Top = 430
 $outputLabel.AutoSize = $true
 
-$downloadOutputButton = New-IconButton $downloadIcon 'Download output as CSV' 668 404
+$downloadOutputButton = New-IconButton $downloadIcon 'Download output as CSV' 668 422
 $toolTip.SetToolTip($downloadOutputButton, 'Download structured output as CSV')
 $downloadOutputButton.Enabled = $false
 
-$copyOutputButton = New-IconButton $copyIcon 'Copy output' 704 404
+$copyOutputButton = New-IconButton $copyIcon 'Copy output' 704 422
 $toolTip.SetToolTip($copyOutputButton, 'Copy output')
 
 $outputTextBox = New-Object System.Windows.Forms.TextBox
 $outputTextBox.Left = 24
-$outputTextBox.Top = 440
+$outputTextBox.Top = 458
 $outputTextBox.Width = 710
 $outputTextBox.Height = 246
 $outputTextBox.Anchor = 'Top, Bottom, Left, Right'
@@ -566,10 +700,12 @@ $form.Controls.AddRange(@(
     $sourcePrefixLabel,
     $sourceTextBox,
     $sourceLocationLabel,
+    $sourceStorageClassLabel,
     $destinationLabel,
     $destinationPrefixLabel,
     $destinationTextBox,
     $destinationLocationLabel,
+    $destinationStorageClassLabel,
     $locationWarningLabel,
     $mergeDestinationCheckBox,
     $overwriteMatchingFilesCheckBox,
@@ -606,7 +742,7 @@ $metadataOperationTimer.Add_Tick({
     try {
         $result = @($script:MetadataPowerShell.EndInvoke($script:MetadataOperation)) | Select-Object -Last 1
         if ($null -eq $result) {
-            $result = [pscustomobject]@{ Known = $false; DisplayLocation = ''; LocationKey = '' }
+            $result = [pscustomobject]@{ Known = $false; DisplayLocation = ''; LocationKey = ''; Location = ''; DataLocations = @(); StorageClassKnown = $false; StorageClass = '' }
         }
         $script:BucketLocationCache[$script:MetadataBucket] = $result
     }
@@ -615,6 +751,10 @@ $metadataOperationTimer.Add_Tick({
             Known = $false
             DisplayLocation = ''
             LocationKey = ''
+            Location = ''
+            DataLocations = @()
+            StorageClassKnown = $false
+            StorageClass = ''
         }
     }
     finally {
