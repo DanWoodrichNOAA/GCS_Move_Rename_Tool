@@ -769,7 +769,7 @@ $metadataOperationTimer.Add_Tick({
 })
 
 $prerequisiteTimer = New-Object System.Windows.Forms.Timer
-$prerequisiteTimer.Interval = 60000
+$prerequisiteTimer.Interval = 10000
 $prerequisiteTimer.Add_Tick({ Update-Prerequisites })
 
 $operationTimer = New-Object System.Windows.Forms.Timer
