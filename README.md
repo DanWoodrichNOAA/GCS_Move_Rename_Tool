@@ -6,6 +6,10 @@ A small Windows PowerShell/WinForms application for moving or renaming Google Cl
 gcloud storage mv 'gs://source/path' 'gs://destination/path'
 ```
 
+[![Download GCS Move / Rename for Windows](https://img.shields.io/badge/Download_for_Windows-GcsMoveTool.exe-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/DanWoodrichNOAA/GCS_Move_Rename_Tool/releases/latest/download/GcsMoveTool.exe)
+
+The button downloads `GcsMoveTool.exe` from the latest published GitHub release. Google Cloud CLI and Application Default Credentials are still required as described below.
+
 ## Prerequisites
 
 - Windows PowerShell 5.1 or later.
@@ -52,6 +56,35 @@ The distributable is written to `dist\GcsMoveTool.exe`. Set an explicit four-par
 ```
 
 Distribute only the executable. Each client still needs Google Cloud CLI on `PATH`, valid ADC, and the appropriate GCS IAM permissions. Code-sign the executable with the organization's trusted signing certificate before broad distribution.
+
+## Publish a release
+
+Keep source and build scripts in the repository, and keep generated files in the ignored `dist\` directory. GitHub Releases should contain the distributable binary rather than committing it to the repository.
+
+For each release:
+
+1. Choose a semantic version such as `1.2.0`, then build its matching four-part Windows file version:
+
+	```powershell
+	.\Build.ps1 -Version 1.2.0.0
+	```
+
+2. Code-sign `dist\GcsMoveTool.exe` and test the signed executable on a clean Windows environment with Google Cloud CLI installed.
+3. Commit the release-ready source, create and push an annotated tag such as `v1.2.0`, and create a GitHub Release from that tag.
+4. Attach `dist\GcsMoveTool.exe` to the release with that exact filename. Do not append the version to the asset name; the stable download button depends on it.
+5. Publish the release as a normal release, not a draft or prerelease. GitHub then serves the asset at:
+
+	```text
+	https://github.com/DanWoodrichNOAA/GCS_Move_Rename_Tool/releases/latest/download/GcsMoveTool.exe
+	```
+
+Include concise release notes and the executable's SHA-256 hash so users can verify the download:
+
+```powershell
+Get-FileHash .\dist\GcsMoveTool.exe -Algorithm SHA256
+```
+
+The first published release is required before the download button will work. Later releases automatically replace the target of the same button when they include an asset named `GcsMoveTool.exe`.
 
 # Disclaimer
 
