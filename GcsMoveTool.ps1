@@ -11,7 +11,7 @@ Add-Type -AssemblyName System.Windows.Forms
 
 $script:GcloudPath = $null
 $script:GcloudReady = $false
-$script:AdcReady = $false
+$script:AuthReady = $false
 $script:Operation = $null
 $script:OperationPowerShell = $null
 $script:StructuredOutput = @()
@@ -86,7 +86,7 @@ function New-IconBitmap {
 function Format-CommandArgument {
     param([string]$Value)
 
-    return "'{0}'" -f $Value.Replace("'", "''")
+    return '"{0}"' -f $Value.Replace('"', '""')
 }
 
 function Get-EquivalentCommand {
@@ -94,14 +94,14 @@ function Get-EquivalentCommand {
         [string]$Source,
         [string]$Destination,
         [bool]$MergeDestination,
-        [bool]$OverrideMatchingFiles
+        [bool]$overwriteMatchingFiles
     )
 
     if ($MergeDestination) {
         $Source = "$($Source.TrimEnd('/'))/**"
         $Destination = "$($Destination.TrimEnd('/'))/"
     }
-    $noClobberArgument = if ($OverrideMatchingFiles) { '' } else { ' --no-clobber' }
+    $noClobberArgument = if ($overwriteMatchingFiles) { '' } else { ' --no-clobber' }
     return 'gcloud storage mv{0} {1} {2}' -f $noClobberArgument, (Format-CommandArgument $Source), (Format-CommandArgument $Destination)
 }
 
@@ -344,13 +344,13 @@ function Test-GcloudAvailable {
     return $true
 }
 
-function Test-ApplicationDefaultCredentials {
+function Test-GcloudAuth {
     if (-not $script:GcloudReady) {
         return $false
     }
 
     try {
-        $output = & $script:GcloudPath auth application-default print-access-token --quiet 2>$null
+        $output = & $script:GcloudPath auth print-access-token --quiet 2>$null
         return ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace(($output -join '')))
     }
     catch {
@@ -364,15 +364,15 @@ function Update-Prerequisites {
         Set-StatusIndicator $gcloudStatus $script:GcloudReady 'gcloud on PATH' 'Install the Google Cloud CLI, then add its bin folder to PATH and restart this application.'
     }
 
-    if (-not $script:AdcReady) {
-        $script:AdcReady = Test-ApplicationDefaultCredentials
-        Set-StatusIndicator $adcStatus $script:AdcReady 'Application Default Credentials' 'Open a terminal, run gcloud auth application-default login, and then return to this application.'
+    if (-not $script:AuthReady) {
+        $script:AuthReady = Test-GcloudAuth
+        Set-StatusIndicator $authStatus $script:AuthReady 'gcloud Auth' 'Open a terminal, run gcloud auth login, and then return to this application.'
     }
 
     Update-ExecuteState
     Update-BucketLocationDisplay
     Start-NextBucketLocationLookup
-    if ($script:GcloudReady -and $script:AdcReady) {
+    if ($script:GcloudReady -and $script:AuthReady) {
         $prerequisiteTimer.Stop()
     }
 }
@@ -380,7 +380,7 @@ function Update-Prerequisites {
 function Update-ExecuteState {
     $pathsPresent = -not [string]::IsNullOrWhiteSpace($sourceTextBox.Text) -and
         -not [string]::IsNullOrWhiteSpace($destinationTextBox.Text)
-    $executeButton.Enabled = $pathsPresent -and $script:GcloudReady -and $script:AdcReady -and $null -eq $script:Operation
+    $executeButton.Enabled = $pathsPresent -and $script:GcloudReady -and $script:AuthReady -and $null -eq $script:Operation
 }
 
 function Update-CommandPreview {
@@ -397,7 +397,7 @@ function Update-CommandPreview {
         (Get-GcsPath $sourceTextBox) `
         (Get-GcsPath $destinationTextBox) `
         $mergeDestinationCheckBox.Checked `
-        $overrideMatchingFilesCheckBox.Checked
+        $overwriteMatchingFilesCheckBox.Checked
 }
 
 $form = New-Object System.Windows.Forms.Form
@@ -418,9 +418,9 @@ $failureIcon = New-IconBitmap Failure
 $copyIcon = New-IconBitmap Copy 18
 $downloadIcon = New-IconBitmap Download 18
 
-$gcloudStatus = New-StatusIndicator 'gcloud on PATH' 506
-$adcStatus = New-StatusIndicator 'Application Default Credentials' 736
-$form.Controls.AddRange(@($gcloudStatus, $adcStatus))
+$gcloudStatus = New-StatusIndicator 'gcloud on PATH' 616
+$authStatus = New-StatusIndicator 'gcloud Auth' 736
+$form.Controls.AddRange(@($gcloudStatus, $authStatus))
 
 $sourceLabel = New-Object System.Windows.Forms.Label
 $sourceLabel.Text = 'Source Google Cloud Storage Bucket path'
@@ -492,13 +492,13 @@ $mergeDestinationCheckBox.AutoSize = $true
 $mergeDestinationCheckBox.Checked = $true
 $toolTip.SetToolTip($mergeDestinationCheckBox, 'Move the source directory contents directly into the destination instead of creating a source-named subdirectory.')
 
-$overrideMatchingFilesCheckBox = New-Object System.Windows.Forms.CheckBox
-$overrideMatchingFilesCheckBox.Text = 'Override matching files'
-$overrideMatchingFilesCheckBox.Left = 280
-$overrideMatchingFilesCheckBox.Top = 249
-$overrideMatchingFilesCheckBox.AutoSize = $true
-$overrideMatchingFilesCheckBox.Checked = $false
-$toolTip.SetToolTip($overrideMatchingFilesCheckBox, 'Allow matching destination files to be replaced; when unchecked, gcloud uses --no-clobber and skips them.')
+$overwriteMatchingFilesCheckBox = New-Object System.Windows.Forms.CheckBox
+$overwriteMatchingFilesCheckBox.Text = 'Overwrite matching files'
+$overwriteMatchingFilesCheckBox.Left = 280
+$overwriteMatchingFilesCheckBox.Top = 249
+$overwriteMatchingFilesCheckBox.AutoSize = $true
+$overwriteMatchingFilesCheckBox.Checked = $false
+$toolTip.SetToolTip($overwriteMatchingFilesCheckBox, 'Allow matching destination files to be replaced; when unchecked, gcloud uses --no-clobber and skips them.')
 
 $executeButton = New-Object System.Windows.Forms.Button
 $executeButton.Text = 'Execute'
@@ -572,7 +572,7 @@ $form.Controls.AddRange(@(
     $destinationLocationLabel,
     $locationWarningLabel,
     $mergeDestinationCheckBox,
-    $overrideMatchingFilesCheckBox,
+    $overwriteMatchingFilesCheckBox,
     $executeButton,
     $commandLabel,
     $copyCommandButton,
@@ -671,7 +671,7 @@ $operationTimer.Add_Tick({
         $sourceTextBox.Enabled = $true
         $destinationTextBox.Enabled = $true
         $mergeDestinationCheckBox.Enabled = $true
-        $overrideMatchingFilesCheckBox.Enabled = $true
+        $overwriteMatchingFilesCheckBox.Enabled = $true
         Update-ExecuteState
     }
 })
@@ -695,7 +695,7 @@ $mergeDestinationCheckBox.Add_CheckedChanged({
     $previewTimer.Stop()
     $previewTimer.Start()
 })
-$overrideMatchingFilesCheckBox.Add_CheckedChanged({
+$overwriteMatchingFilesCheckBox.Add_CheckedChanged({
     $previewTimer.Stop()
     $previewTimer.Start()
 })
@@ -743,7 +743,7 @@ $executeButton.Add_Click({
     $sourceTextBox.Enabled = $false
     $destinationTextBox.Enabled = $false
     $mergeDestinationCheckBox.Enabled = $false
-    $overrideMatchingFilesCheckBox.Enabled = $false
+    $overwriteMatchingFilesCheckBox.Enabled = $false
     $executeButton.Enabled = $false
     $script:StructuredOutput = @()
     $downloadOutputButton.Enabled = $false
@@ -751,10 +751,10 @@ $executeButton.Add_Click({
 
     $script:OperationPowerShell = [PowerShell]::Create()
     [void]$script:OperationPowerShell.AddScript({
-        param($GcloudPath, $Source, $Destination, $OverrideMatchingFiles)
+        param($GcloudPath, $Source, $Destination, $overwriteMatchingFiles)
         $sequence = 0
         $arguments = @('storage', 'mv')
-        if (-not $OverrideMatchingFiles) {
+        if (-not $overwriteMatchingFiles) {
             $arguments += '--no-clobber'
         }
         $arguments += @('--', $Source, $Destination)
@@ -776,7 +776,7 @@ $executeButton.Add_Click({
                 Message = "gcloud exited with code $LASTEXITCODE."
             }
         }
-    }).AddArgument($script:GcloudPath).AddArgument($source).AddArgument($destination).AddArgument($overrideMatchingFilesCheckBox.Checked)
+    }).AddArgument($script:GcloudPath).AddArgument($source).AddArgument($destination).AddArgument($overwriteMatchingFilesCheckBox.Checked)
     $script:Operation = $script:OperationPowerShell.BeginInvoke()
     $operationTimer.Start()
 })
@@ -784,7 +784,7 @@ $executeButton.Add_Click({
 $form.Add_Shown({
     $form.Activate()
     Update-Prerequisites
-    if (-not ($script:GcloudReady -and $script:AdcReady)) {
+    if (-not ($script:GcloudReady -and $script:AuthReady)) {
         $prerequisiteTimer.Start()
     }
     Update-CommandPreview

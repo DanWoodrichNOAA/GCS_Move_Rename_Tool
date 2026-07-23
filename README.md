@@ -27,7 +27,7 @@ The application will automatically check for needed dependencies, which are ofte
 ## Dependencies and other Prerequisites
 
 - [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) installed and `gcloud` available on `PATH`.
-- Application Default Credentials initialized with `gcloud auth application-default login`.
+- Google Cloud CLI authorized with `gcloud auth login`.
 - GCS permissions needed to read/create/delete and list the affected objects, and get bucket metadata.
 
 # Disclaimer
