@@ -4,93 +4,29 @@
 
 A small Windows PowerShell/WinForms application for moving or renaming Google Cloud Storage objects without mounting a bucket or downloading and re-uploading data. Moving / renaming data (synonymous in GCS) is a common pain point in Google Cloud Storage buckets: while working over mounts in a local client is often a convenient way to interface with buckets, an operation that feels like a simple rename can be incorrectly interpreted by mount software as a download / reupload operation, which can lead to crashes, poor performance, and high data egress charges. 
 
-For these reasons, keeping rename / move operation strictly on the platform is both performant and cost effecient. This can be done with a google provided utility, in the most simple form shown below. 
+For these reasons, keeping rename / move operation strictly on the platform is both performant and cost efficient. This can be done with a google provided utility, gcloud CLI, in the most simple form shown below. 
 
 ```powershell
 gcloud storage mv 'gs://source/path' 'gs://destination/path'
 ```
 
-However, the gcloud CLI can be unfriendly, espeically to less technical users. Trailing slashes, wildcards, and source folder duplication on conflict can turn a simple logical operation into an arduous learning exercise, and potentially put data at risk if the behavior of the utility is misinterpreted. 
+However, the gcloud CLI can be user unfriendly, and even for experienced users the syntax isn't always obvious. Trailing slashes, wildcards, and source folder duplication on conflict can turn a simple logical operation into an arduous learning exercise, and potentially put data at risk if the behavior of the utility is misinterpreted. 
 
 This application serves to leverage the powerful server side operations for GCS in a user-friendly and consistent local interface. 
 
 ![Screenshot of Alpha3 release of GCS Move/Rename tool](doc/images/Alpha3_ss.png)
 
+## How to use
+
+Download the .exe for the tool from the latest release, using the link at the top of the readme. Place in a local folder of your choosing. When first opened, opt to trust the tool. 
+
+The application will automatically check for needed dependencies, which are often already configured on systems of users that have used Google Cloud Platform before. If they are not found, hover over the ❌ and the application hover will tell you how to resolve the issue. Below are the following prerequisites.
+
 ## Prerequisites
 
-- Windows PowerShell 5.1 or later.
 - [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) installed and `gcloud` available on `PATH`.
 - Application Default Credentials initialized with `gcloud auth application-default login`.
-- GCS permissions needed to read/create/delete the affected objects and list objects when using wildcards.
-
-The application checks `gcloud` and ADC at startup. A failed check is retried every minute; successful checks are not repeated. Hover over a red X for the remediation command.
-
-## Run from source
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\GcsMoveTool.ps1
-```
-
-Enter the source and destination after the fixed `gs://` prefixes. **Merge into destination directory** is enabled by default; it moves `source/**` directly into `destination/` instead of creating a source-named subdirectory when the destination already exists. Disable it to use the paths exactly as entered.
-
-**Override matching files** is disabled by default, so the command includes `--no-clobber` and skips matching destination objects. Enable it to allow matching objects to be replaced.
-
-After a bucket is entered, the application uses `gcloud storage buckets describe` to display its location. Custom dual-region buckets show both data locations separated by `/`; other buckets show their single region or multi-region name. Results are cached for the session. When both paths use the same bucket, only one lookup is made and no egress warning is shown. Different known locations show an egress warning; inaccessible or unknown metadata shows that egress costs may apply.
-
-The upper message area previews the exact copyable PowerShell command after a short delay. Select **Execute** to run the move; the lower area receives combined stdout and stderr. Output is retained in memory and can be exported with the download button. CSV rows include sequence, UTC timestamp, stream, action, source object, destination object, and an unstructured-message fallback for output that is not a `Copying` or `Removing` record.
-
-No bucket browser is included, and the application does not store credentials. Wildcards and folder semantics are handled by `gcloud storage mv` itself.
-
-## Build the executable
-
-Install PS2EXE once for the account that creates releases:
-
-```powershell
-Install-Module ps2exe -Scope CurrentUser
-```
-
-Then build the no-console, 64-bit, STA executable:
-
-```powershell
-.\Build.ps1
-```
-
-The distributable is written to `dist\GcsMoveTool.exe`. Set an explicit four-part file version when needed:
-
-```powershell
-.\Build.ps1 -Version 1.2.0.0
-```
-
-Distribute only the executable. Each client still needs Google Cloud CLI on `PATH`, valid ADC, and the appropriate GCS IAM permissions. Code-sign the executable with the organization's trusted signing certificate before broad distribution.
-
-## Publish a release
-
-Keep source and build scripts in the repository, and keep generated files in the ignored `dist\` directory. GitHub Releases should contain the distributable binary rather than committing it to the repository.
-
-For each release:
-
-1. Choose a semantic version such as `1.2.0`, then build its matching four-part Windows file version:
-
-	```powershell
-	.\Build.ps1 -Version 1.2.0.0
-	```
-
-2. Code-sign `dist\GcsMoveTool.exe` and test the signed executable on a clean Windows environment with Google Cloud CLI installed.
-3. Commit the release-ready source, create and push an annotated tag such as `v1.2.0`, and create a GitHub Release from that tag.
-4. Attach `dist\GcsMoveTool.exe` to the release with that exact filename. Do not append the version to the asset name; the stable download button depends on it.
-5. Publish the release as a normal release, not a draft or prerelease. GitHub then serves the asset at:
-
-	```text
-	https://github.com/DanWoodrichNOAA/GCS_Move_Rename_Tool/releases/latest/download/GcsMoveTool.exe
-	```
-
-Include concise release notes and the executable's SHA-256 hash so users can verify the download:
-
-```powershell
-Get-FileHash .\dist\GcsMoveTool.exe -Algorithm SHA256
-```
-
-The first published release is required before the download button will work. Later releases automatically replace the target of the same button when they include an asset named `GcsMoveTool.exe`.
+- GCS permissions needed to read/create/delete and list the affected objects, and get bucket metadata.
 
 # Disclaimer
 
