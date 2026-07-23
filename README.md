@@ -20,13 +20,15 @@ This application serves to leverage the powerful server side operations for GCS 
 
 Download the .exe for the tool from the latest release, using the link at the top of the readme. Place in a local folder of your choosing. When first opened, opt to trust the tool. 
 
-The application will automatically check for needed dependencies, which are often already configured on systems of users that have used Google Cloud Platform before. If they are not found, hover over the ❌ and the application hover will tell you how to resolve the issue. Below are the following prerequisites.
+The application will automatically check for needed dependencies, which are often already configured on systems of users that have used Google Cloud Platform before. If they are not found, hover over the ❌ and the application hover will tell you how to resolve the issue. 
 
-## Prerequisites
+## Dependencies and other Prerequisites
 
 - [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) installed and `gcloud` available on `PATH`.
 - Application Default Credentials initialized with `gcloud auth application-default login`.
 - GCS permissions needed to read/create/delete and list the affected objects, and get bucket metadata.
+
+![Missing dependency notice](doc/images/Alpha3_ss_dep_not_met.png)
 
 # Disclaimer
 
