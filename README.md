@@ -26,7 +26,7 @@ The application will automatically check for needed dependencies, which are ofte
 
 ## Features
 
-In addition to streamlining GCS move/rename events, the app will also provide some visibility and warning of cost considerations around egress and access fees. While the cost model of GCS is nuanced, this provides some quick feedback for users who may not casually understand higher cost implications for some types of moves. 
+In addition to streamlining GCS move/rename events, the app will also provide some visibility and warning of cost considerations around egress and retrieval fees. While the cost model of GCS is nuanced, this provides some quick feedback for users who may not casually understand higher cost implications for some types of moves. 
 
 ![Cost warning for egress](doc/images/app_screenshot2.png)
 
