@@ -93,12 +93,12 @@ function Get-EquivalentCommand {
     param(
         [string]$Source,
         [string]$Destination,
-        [bool]$PreserveDirectoryStructure,
+        [bool]$MergeDestination,
         [bool]$overwriteMatchingFiles
     )
 
-    if (-not $PreserveDirectoryStructure) {
-        $Source = "$($Source.TrimEnd('/'))/**"
+    if ($MergeDestination) {
+        $Source = "$($Source.TrimEnd('/'))/*"
         $Destination = "$($Destination.TrimEnd('/'))/"
     }
     $noClobberArgument = if ($overwriteMatchingFiles) { '' } else { ' --no-clobber' }
@@ -515,7 +515,7 @@ function Update-CommandPreview {
     $commandTextBox.Text = Get-EquivalentCommand `
         (Get-GcsPath $sourceTextBox) `
         (Get-GcsPath $destinationTextBox) `
-        $preserveDirectoryStructureCheckBox.Checked `
+        $mergeDestinationCheckBox.Checked `
         $overwriteMatchingFilesCheckBox.Checked
 }
 
@@ -618,13 +618,13 @@ $locationWarningLabel.MaximumSize = New-Object System.Drawing.Size(710, 0)
 $locationWarningLabel.ForeColor = [System.Drawing.Color]::FromArgb(176, 35, 45)
 $locationWarningLabel.Font = New-Object System.Drawing.Font('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
 
-$preserveDirectoryStructureCheckBox = New-Object System.Windows.Forms.CheckBox
-$preserveDirectoryStructureCheckBox.Text = 'Preserve directory structure'
-$preserveDirectoryStructureCheckBox.Left = 24
-$preserveDirectoryStructureCheckBox.Top = 267
-$preserveDirectoryStructureCheckBox.AutoSize = $true
-$preserveDirectoryStructureCheckBox.Checked = $true
-$toolTip.SetToolTip($preserveDirectoryStructureCheckBox, 'Keep each object path relative to the source directory. Uncheck to move all objects directly into the destination directory.')
+$mergeDestinationCheckBox = New-Object System.Windows.Forms.CheckBox
+$mergeDestinationCheckBox.Text = 'Merge into destination directory'
+$mergeDestinationCheckBox.Left = 24
+$mergeDestinationCheckBox.Top = 267
+$mergeDestinationCheckBox.AutoSize = $true
+$mergeDestinationCheckBox.Checked = $true
+$toolTip.SetToolTip($mergeDestinationCheckBox, 'Move the source directory contents directly into the destination instead of creating a source-named subdirectory.')
 
 $overwriteMatchingFilesCheckBox = New-Object System.Windows.Forms.CheckBox
 $overwriteMatchingFilesCheckBox.Text = 'Overwrite matching files'
@@ -707,7 +707,7 @@ $form.Controls.AddRange(@(
     $destinationLocationLabel,
     $destinationStorageClassLabel,
     $locationWarningLabel,
-    $preserveDirectoryStructureCheckBox,
+    $mergeDestinationCheckBox,
     $overwriteMatchingFilesCheckBox,
     $executeButton,
     $commandLabel,
@@ -810,7 +810,7 @@ $operationTimer.Add_Tick({
         $script:Operation = $null
         $sourceTextBox.Enabled = $true
         $destinationTextBox.Enabled = $true
-        $preserveDirectoryStructureCheckBox.Enabled = $true
+        $mergeDestinationCheckBox.Enabled = $true
         $overwriteMatchingFilesCheckBox.Enabled = $true
         Update-ExecuteState
     }
@@ -831,7 +831,7 @@ $pathChanged = {
 }
 $sourceTextBox.Add_TextChanged($pathChanged)
 $destinationTextBox.Add_TextChanged($pathChanged)
-$preserveDirectoryStructureCheckBox.Add_CheckedChanged({
+$mergeDestinationCheckBox.Add_CheckedChanged({
     $previewTimer.Stop()
     $previewTimer.Start()
 })
@@ -874,15 +874,15 @@ $downloadOutputButton.Add_Click({
 $executeButton.Add_Click({
     $source = Get-GcsPath $sourceTextBox
     $destination = Get-GcsPath $destinationTextBox
-    if (-not $preserveDirectoryStructureCheckBox.Checked) {
-        $source = "$($source.TrimEnd('/'))/**"
+    if ($mergeDestinationCheckBox.Checked) {
+        $source = "$($source.TrimEnd('/'))/*"
         $destination = "$($destination.TrimEnd('/'))/"
     }
 
     $previewTimer.Stop()
     $sourceTextBox.Enabled = $false
     $destinationTextBox.Enabled = $false
-    $preserveDirectoryStructureCheckBox.Enabled = $false
+    $mergeDestinationCheckBox.Enabled = $false
     $overwriteMatchingFilesCheckBox.Enabled = $false
     $executeButton.Enabled = $false
     $script:StructuredOutput = @()
