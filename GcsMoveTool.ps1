@@ -93,11 +93,11 @@ function Get-EquivalentCommand {
     param(
         [string]$Source,
         [string]$Destination,
-        [bool]$MergeDestination,
+        [bool]$PreserveDirectoryStructure,
         [bool]$overwriteMatchingFiles
     )
 
-    if ($MergeDestination) {
+    if (-not $PreserveDirectoryStructure) {
         $Source = "$($Source.TrimEnd('/'))/**"
         $Destination = "$($Destination.TrimEnd('/'))/"
     }
@@ -515,7 +515,7 @@ function Update-CommandPreview {
     $commandTextBox.Text = Get-EquivalentCommand `
         (Get-GcsPath $sourceTextBox) `
         (Get-GcsPath $destinationTextBox) `
-        $mergeDestinationCheckBox.Checked `
+        $preserveDirectoryStructureCheckBox.Checked `
         $overwriteMatchingFilesCheckBox.Checked
 }
 
@@ -618,13 +618,13 @@ $locationWarningLabel.MaximumSize = New-Object System.Drawing.Size(710, 0)
 $locationWarningLabel.ForeColor = [System.Drawing.Color]::FromArgb(176, 35, 45)
 $locationWarningLabel.Font = New-Object System.Drawing.Font('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
 
-$mergeDestinationCheckBox = New-Object System.Windows.Forms.CheckBox
-$mergeDestinationCheckBox.Text = 'Merge into destination directory'
-$mergeDestinationCheckBox.Left = 24
-$mergeDestinationCheckBox.Top = 267
-$mergeDestinationCheckBox.AutoSize = $true
-$mergeDestinationCheckBox.Checked = $true
-$toolTip.SetToolTip($mergeDestinationCheckBox, 'Move the source directory contents directly into the destination instead of creating a source-named subdirectory.')
+$preserveDirectoryStructureCheckBox = New-Object System.Windows.Forms.CheckBox
+$preserveDirectoryStructureCheckBox.Text = 'Preserve directory structure'
+$preserveDirectoryStructureCheckBox.Left = 24
+$preserveDirectoryStructureCheckBox.Top = 267
+$preserveDirectoryStructureCheckBox.AutoSize = $true
+$preserveDirectoryStructureCheckBox.Checked = $true
+$toolTip.SetToolTip($preserveDirectoryStructureCheckBox, 'Keep each object path relative to the source directory. Uncheck to move all objects directly into the destination directory.')
 
 $overwriteMatchingFilesCheckBox = New-Object System.Windows.Forms.CheckBox
 $overwriteMatchingFilesCheckBox.Text = 'Overwrite matching files'
@@ -707,7 +707,7 @@ $form.Controls.AddRange(@(
     $destinationLocationLabel,
     $destinationStorageClassLabel,
     $locationWarningLabel,
-    $mergeDestinationCheckBox,
+    $preserveDirectoryStructureCheckBox,
     $overwriteMatchingFilesCheckBox,
     $executeButton,
     $commandLabel,
@@ -810,7 +810,7 @@ $operationTimer.Add_Tick({
         $script:Operation = $null
         $sourceTextBox.Enabled = $true
         $destinationTextBox.Enabled = $true
-        $mergeDestinationCheckBox.Enabled = $true
+        $preserveDirectoryStructureCheckBox.Enabled = $true
         $overwriteMatchingFilesCheckBox.Enabled = $true
         Update-ExecuteState
     }
@@ -831,7 +831,7 @@ $pathChanged = {
 }
 $sourceTextBox.Add_TextChanged($pathChanged)
 $destinationTextBox.Add_TextChanged($pathChanged)
-$mergeDestinationCheckBox.Add_CheckedChanged({
+$preserveDirectoryStructureCheckBox.Add_CheckedChanged({
     $previewTimer.Stop()
     $previewTimer.Start()
 })
@@ -874,7 +874,7 @@ $downloadOutputButton.Add_Click({
 $executeButton.Add_Click({
     $source = Get-GcsPath $sourceTextBox
     $destination = Get-GcsPath $destinationTextBox
-    if ($mergeDestinationCheckBox.Checked) {
+    if (-not $preserveDirectoryStructureCheckBox.Checked) {
         $source = "$($source.TrimEnd('/'))/**"
         $destination = "$($destination.TrimEnd('/'))/"
     }
@@ -882,7 +882,7 @@ $executeButton.Add_Click({
     $previewTimer.Stop()
     $sourceTextBox.Enabled = $false
     $destinationTextBox.Enabled = $false
-    $mergeDestinationCheckBox.Enabled = $false
+    $preserveDirectoryStructureCheckBox.Enabled = $false
     $overwriteMatchingFilesCheckBox.Enabled = $false
     $executeButton.Enabled = $false
     $script:StructuredOutput = @()

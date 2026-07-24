@@ -24,6 +24,8 @@ The application will automatically check for needed dependencies, which are ofte
 
 ![Missing dependency notice](doc/images/app_screenshot_dep_not_met.png)
 
+Directory structure is preserved by default. For example, moving `gs://bucket/folder1` to `gs://bucket/folder3` moves `folder1/folder2/contents.txt` to `folder3/folder2/contents.txt`. Clear **Preserve directory structure** only when every object should be moved directly into the destination directory.
+
 ## Features
 
 In addition to streamlining GCS move/rename events, the app will also provide some visibility and warning of cost considerations around egress and retrieval fees. While the cost model of GCS is nuanced, this provides some quick feedback for users who may not casually understand higher cost implications for some types of moves. 
